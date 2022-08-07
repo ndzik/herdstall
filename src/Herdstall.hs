@@ -1,0 +1,170 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE PolyKinds #-}
+{-# LANGUAGE TypeFamilies #-}
+
+module MyLib () where
+
+newtype Input i = Input i deriving (Show, Eq)
+
+newtype Output o = Output o deriving (Show, Eq)
+
+-- An IdealFunctionality is a function
+data IdealFunctionality i o = [Input i] :-> [Output o]
+
+-- type ErdstallProcessing = IdealFunctionality []
+
+-- -- User represents a User over the set of natural numbers. User 0 is
+-- -- specified as a special user which cannot commit any actions within
+-- -- Erdstall.
+-- data User i :: Natural -> User Natural where
+--  Zero :: 0 -> User 0
+--  User :: i -> User i
+--
+-- -- Nonce maps to each User /= Zero its current nonce.
+-- data Nonce i :: User -> Natural
+--
+-- -- Values is an underspecified type allowing to identify concrete amounts of
+-- -- values associated to something.
+-- data Values
+--
+-- type Assets = Group (Values, +, ZeroAssets, -)
+--
+-- -- Balances maps to each User its currently available values.
+-- data Balances u :: User -> Values
+--
+-- -- Locked maps to each User its currently locked balances.
+-- -- It holds that ∀ u ∈ User : (Balances u ∩ Locked u == ZeroAssets)
+-- data Locked u :: User -> Values
+--
+-- data UpdateType = Stays | Leaves
+--
+-- data UserUpdate u n v l :: User i -> UpdateType -> Natural -> Values -> UserUpdate u n v l where
+--  UserUpdate :: u -> Stays -> n -> c -> UserUpdate u n (Balances u + c) (Locked u)
+--  UserUpdate :: u -> Leaves -> n -> -> UserUpdate u n ZeroAssets (Locked u + Balances u)
+--
+-- data Transaction = Transfer i j | Mint | Trade i j | Burn | Exit
+--
+-- -- ValuesOf extracts the balances contained in a given transaction.
+-- ValuesOf :: Transaction -> Map User Values where
+--
+-- -- ChangeInTx returns the changed values for the given user with index k, if
+-- -- any.
+-- data ChangeInTx t i :: Transaction -> Natural -> Values where
+--  ChangeInTx :: (i == k || j == k) => Transfer i j -> k -> (ValuesOf (Transfer i j))[k]
+--  ChangeInTx :: Mint -> k -> (ValuesOf Mint)[k]
+--  ChangeInTx :: Trade i j -> k -> (ValuesOf Trade i j)[k]
+--  ChangeInTx :: Burn -> k -> (ValuesOf Burn)[k]
+--  ChangeInTx :: Exit -> k -> (-Balance k)
+--
+-- -- ErdstallProcessing represents the ideal functionality of the processing
+-- -- effects for Erdstall transactions processed by the execution entity.
+-- data ErdstallProcessing :: IdealFunctionality () [Channel (User, Natural, Transaction)] [Channel [UserUpdate]] where
+--  ProcessTransfer :: (User i, Nonce i, Transfer i j)  -> [ UserUpdate (User i) Stays ((Nonce i) + 1) (ChangeInTx (Transfer i j) i)
+--                                                         , UserUpdate (User j) Stays (Nonce j) (ChangeInTx (Transfer i j) j
+--                                                         ]
+--  ProcessMint     :: (User i, Nonce i, Mint)          -> [ UserUpdate (User i) Stays ((Nonce i) + 1) (ChangeInTx Mint i) ]
+--  ProcessTrade    :: (User i, Nonce i, Trade i j)     -> [ UserUpdate (User i) Stays (Nonce i) (ChangeInTx (Trade i j) i)
+--                                                         , UserUpdate (User j) Stays ((Nonce j) + 1) (ChangeInTx (Trade i j) j)
+--                                                         ]
+--  ProcessBurn     :: (User i, Nonce i, Burn)          -> [ UserUpdate (User i) Stays ((Nonce i) + 1) (ChangeInTx Burn i)
+--                                                         , UserUpdate (ZERO)   Stays (Bottom) (ChangeInTx Burn ZeroAddress)
+--                                                         ]
+--  ProcessExit     :: (User i, Nonce i, Exit)          -> [ UserUpdate (User i) Leaves ((Nonce i) + 1)]
+--
+-- For the code running within the processing Enclave of Erdstall,
+-- ErdstallProcessing defines the ideal functionality. Since the enclave is
+-- assumed to be a trusted-execution-environment (TEE), any implementation
+-- adhering to the contract of ErdstallProcessing for transactions is assumed
+-- to realize that functionality.
+--
+-- -- AffectedUsers returns all users for which Deposit or Withdraw events were
+-- -- registered.
+-- data AffectedUsers :: Block -> [User]
+--
+-- -- ChangeInBlock returns the values associated with the given user. The
+-- -- actual value for the return value is dependent on whether a Block contains
+-- -- Withdraw or Deposit events for that given user.
+-- data ChangeInBlock :: Block -> Natural -> Value
+--
+-- data Mode = Continue | Challenge
+--
+-- -- ErdstallBlockProcessing describes the ideal functionality that the
+-- -- integrity (and authenticity) of a Block can be checked and a valid list
+-- -- of updates extracted.
+-- data ErdstallBlockProcessing :: IdealFunctionality () [Channel Block] [Channel Either Mode [UserUpdate]] where
+--  ProcessBlock :: Block -> Either Mode [ UserUpdate (User i) (Nonce i) (ChangeInBlock Block i) | i ∈ AffectedUsers Block ]
+--
+-- -- ErdstallChallengeHandling for the ideal functionality is simply the
+-- -- identity, since challenge handling is not part of the TEE itself.
+-- data ErdstallChallengeHandling :: IdealFunctionality () [Channel a] [Channel a] where
+--  ProcessChallenge :: Identity
+--
+-- data Entity
+--  -- ExecutionUnit is the current enclave responsible for running Erdstall.
+--  ExecutionUnit :: Entity
+--  -- Any user in Erdstall is also considered to be an entity.
+--  Participant :: User -> Entity
+--
+-- data Signature :: a -> Entity -> Signature
+--
+-- data UserState :: User i -> (User i, Nonce i, Balances (User i))
+-- data BalanceProof :: User i -> Epoch e -> (UserState (User i), Epoch e, Signature (UserState (User i)) ExecutionUnit)
+--
+-- type Epoch = Natural
+-- -- CurrentEpoch returns the current epoch. This can be modelled using
+-- -- category theory, otherwise it can be made explicit by requiring the
+-- -- definition of ErdstallState. The exact formulation is still up to debate.
+-- data CurrentEpoch :: Epoch
+-- type BalanceProofs :: ∀ u ∈ User. [BalanceProof u, CurrentEpoch]
+--
+-- -- ErdstallState describes the state within Erdstall.
+-- type ErdstallState = (Epoch, [UserState])
+--
+-- -- ErdstallProcess describes the ideal functionality of the complete
+-- -- Erdstall process running in a TEE. This results in a sequential
+-- -- composition of the ideal functionalities for:
+--  * ErdstallBlockProcessing
+--      * ErdstallProcessing
+--         * ErdstallChallengeHandling
+-- data ErdstallProcess :: IdealFunctionality ErdstallState [Channel Block, Channel Transaction] [Channel BalanceProofs] where
+-- -- The description on how the ideal functionalities write their input,
+-- -- outputs to the tapes of their ITI subroutines is underspecified for now.
+--
+-- data Event = Deposit (User i) Values (Epoch e)
+--      | Withdraw (User i) Values (Epoch e)
+--      | Challenged (User i) (Epoch e)
+--      | ChallengeResponded (BalanceProof (User i) (Epoch e))
+--      | Frozen (Epoch e)
+--
+-- data ErdstallContractState
+--
+-- -- The ErdstallContract ideal functionality runs on the underlying ledger.
+-- data ErdstallContract :: IdealFunctionality ErdstallContractState [Channel Deposit, Channel Withdraw] [Channel Event]
+--
+-- data LedgerState
+--
+-- -- The ideal functionality for Ledger contains subroutines (other ideal
+-- -- functionalities) c of type [Channel EventType] -> [Channel Event].
+-- -- Note: Ledger is indeed an authenticated communication channel as defined
+-- -- in the original UC paper.
+-- data Ledger c :: IdealFunctionality LedgerState [Channel LedgerTransactions] [Channel Block]
+--
+-- -- Erdstall's ideal functionality is the parallel composition of
+-- -- ErdstallProcess + (Ledger ErdstallContract).
+-- data Erdstall :: IdealFunctionality () [Channel Block, Channel Transaction] [Channel BalanceProof]
+--
+-- What is left to show is that the composition for `Erdstall` is indeed secure
+-- and that the real protocol does indeed realize `Erdstall`.
+--
+-- Security Definitions for `Erdstall`:
+--  The ideal functionality for Erdstall defines a contract (in a semantic and
+--  definitional sense) where valid balance proofs are generated. Every honest
+--  user is guaranteed to receive a valid BalanceProof no matter how many
+--  malicious actors are present as long as Ledger, ErdstallBlockProcessing,
+--  ErdstallProcessing and ErdstallChallengeHandling remain honest/TPPs.
+--
+--  This notion of security implies the following:
+--    Balance Security for offchain transactions => Defined by ErdstallProcessing
+--    Balance Security for deposits              => Defined by ErdstallBlockProcessing ∧ ErdstallContract
+--    Balance Security for withdraws             => Defined by ErdstallBlockProcessing ∧ ErdstallContract
